@@ -1,0 +1,27 @@
+{
+  "database": {
+    "host": "127.0.0.1",
+    "port": 3306,
+    "user": "root",
+    "password": "",
+    "database": "dejavu"
+  },
+  "audio": {
+    "sample_rate": 44100,
+    "block_size": 2048,
+    "channels": 1,
+    "silence_threshold": -40.0,
+    "input_device_index": null,
+    "recording_duration": 10
+  },
+  "paths": {
+    "audio_dir": "mp3",
+    "backgrounds_dir": "backgrounds",
+    "intervals_file": "intervals.pkl"
+  },
+  "playback": {
+    "offset_seconds": 0.45,
+    "default_duration": 30
+  },
+  "debug": false
+}
