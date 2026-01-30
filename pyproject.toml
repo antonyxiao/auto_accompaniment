@@ -1,0 +1,108 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "auto-accompaniment"
+version = "1.0.0"
+description = "Automatic music accompaniment system - identifies songs from vocal input and synchronizes background music playback"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+authors = [
+    {name = "Auto Accompaniment Team"}
+]
+keywords = [
+    "music",
+    "accompaniment",
+    "pitch-detection",
+    "audio",
+    "karaoke",
+    "song-identification",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio :: Analysis",
+    "Topic :: Multimedia :: Sound/Audio :: Players",
+]
+dependencies = [
+    "numpy>=1.21.0",
+    "aubio>=0.4.9",
+    "librosa>=0.9.0",
+    "click>=8.0.0",
+]
+
+[project.optional-dependencies]
+# Full installation with all features
+full = [
+    "pyaudio>=0.2.11",
+    "python-vlc>=3.0.0",
+    "dejavu>=0.1.0",
+    "dtaidistance>=2.0.0",
+]
+# ML-based pitch detection
+ml = [
+    "crepe>=0.0.12",
+    "tensorflow>=2.0.0",
+]
+# Development dependencies
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
+
+[project.scripts]
+auto-accomp = "auto_accompaniment.cli.main:main"
+
+[project.urls]
+Homepage = "https://github.com/antonyxiao/auto_accompaniment"
+Repository = "https://github.com/antonyxiao/auto_accompaniment"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"*" = ["py.typed"]
+
+[tool.black]
+line-length = 88
+target-version = ["py39", "py310", "py311", "py312"]
+
+[tool.ruff]
+line-length = 88
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by black)
+    "B008",  # do not perform function calls in argument defaults
+]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --cov=auto_accompaniment --cov-report=term-missing"

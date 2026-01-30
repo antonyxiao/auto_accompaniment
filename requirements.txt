@@ -1,0 +1,27 @@
+# Auto Accompaniment - Python Dependencies
+# =========================================
+# Install with: pip install -r requirements.txt
+
+# Core dependencies (required)
+numpy>=1.21.0
+aubio>=0.4.9
+librosa>=0.9.0
+click>=8.0.0
+
+# Audio I/O (required for microphone input)
+pyaudio>=0.2.11
+
+# Playback (required for playing accompaniment)
+python-vlc>=3.0.0
+
+# Fingerprinting with Dejavu (optional, for advanced identification)
+# Note: Dejavu requires MySQL database
+# dejavu>=0.1.0
+
+# Dynamic Time Warping (optional, for improved matching)
+dtaidistance>=2.0.0
+
+# ML-based pitch detection (optional, more accurate but slower)
+# Uncomment to use CREPE pitch detection:
+# crepe>=0.0.12
+# tensorflow>=2.0.0

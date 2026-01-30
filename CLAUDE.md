@@ -6,7 +6,7 @@
 
 **Core Functionality:**
 1. Records audio input from a microphone (or processes an audio file)
-2. Detects pitch patterns using the Aubio library
+2. Detects pitch patterns using Aubio or CREPE (ML-based)
 3. Matches detected pitch intervals against a pre-built database of songs
 4. Identifies the best matching song and the exact time offset
 5. Automatically plays the corresponding background accompaniment from that position
@@ -15,236 +15,365 @@
 
 ```
 auto_accompaniment/
-├── extract_pitch.py    # Batch pitch extraction from audio files to build database
-├── fingerprinter.py    # Creates audio fingerprints using Dejavu library
-├── identifier.py       # Main song identification and playback orchestrator
-├── match.py            # Core matching algorithm with pitch-based sequence matching
-├── record_pitch.py     # Records live microphone input and extracts pitch intervals
-├── mp3/                # Directory for source audio files (songs to index)
-├── intervals.pkl       # Serialized pitch intervals database (generated)
-└── CLAUDE.md           # This file
+├── src/
+│   └── auto_accompaniment/          # Main Python package
+│       ├── __init__.py              # Package initialization
+│       ├── __main__.py              # Entry point for python -m
+│       ├── core/                    # Core functionality modules
+│       │   ├── __init__.py
+│       │   ├── pitch.py             # Pitch detection (Aubio/CREPE)
+│       │   ├── matching.py          # Sequence matching algorithms
+│       │   ├── database.py          # Interval database management
+│       │   ├── recorder.py          # Audio recording from microphone
+│       │   └── playback.py          # VLC audio playback
+│       ├── cli/                     # Command-line interface
+│       │   ├── __init__.py
+│       │   └── main.py              # Click-based CLI commands
+│       └── utils/                   # Utility modules
+│           ├── __init__.py
+│           ├── config.py            # Configuration management
+│           └── audio.py             # Audio device utilities
+├── tests/                           # Unit tests
+│   └── __init__.py
+├── mp3/                             # Audio files to index (gitignored)
+├── backgrounds/                     # Background/accompaniment tracks (gitignored)
+├── intervals.pkl                    # Generated pitch database (gitignored)
+│
+├── # Legacy files (for reference)
+├── extract_pitch.py                 # Original batch extraction script
+├── fingerprinter.py                 # Original Dejavu fingerprinting
+├── identifier.py                    # Original song identification
+├── match.py                         # Original matching algorithm
+├── record_pitch.py                  # Original mic recording
+│
+├── # Configuration & Build
+├── pyproject.toml                   # Modern Python project config
+├── requirements.txt                 # Python dependencies
+├── requirements-dev.txt             # Development dependencies
+├── config.example.json              # Example configuration file
+├── .gitignore                       # Git ignore patterns
+└── CLAUDE.md                        # This file
 ```
 
-## Key Files and Their Purposes
+## Quick Start
 
-| File | Purpose | Usage |
-|------|---------|-------|
-| `extract_pitch.py` | Processes all audio files in `mp3/` directory and extracts pitch intervals, saving to `intervals.pkl` | Run once to build/rebuild the pitch database |
-| `fingerprinter.py` | Fingerprints audio files into MySQL database using Dejavu | Run once to initialize Dejavu fingerprint database |
-| `identifier.py` | Main entry point - identifies song via mic/file and plays accompaniment | `python identifier.py` or `python identifier.py <audio_file>` |
-| `match.py` | Performs pitch-based sequence matching against `intervals.pkl` | `python match.py` (mic) or `python match.py <audio_file>` |
-| `record_pitch.py` | Records 8 seconds of microphone input and prints pitch intervals | Development/testing utility |
+### Installation
 
-## Development Workflow
-
-### Initial Setup
-
-1. **Install Python dependencies** (no requirements.txt exists - install manually):
-   ```bash
-   pip install aubio librosa pyaudio numpy dejavu vlc-python dtaidistance wave
-   ```
-
-2. **Set up MySQL database**:
-   ```sql
-   CREATE DATABASE dejavu;
-   ```
-
-3. **Prepare audio files**:
-   - Place source audio files (vocals) in `mp3/` directory
-   - Place background/accompaniment files in the backgrounds directory
-
-4. **Build databases**:
-   ```bash
-   python extract_pitch.py     # Creates intervals.pkl
-   python fingerprinter.py     # Populates Dejavu database
-   ```
-
-### Running the System
-
-**Using microphone input:**
 ```bash
-python identifier.py    # Dejavu-based identification + playback
-python match.py         # Pitch-based matching only
+# Clone the repository
+git clone https://github.com/antonyxiao/auto_accompaniment.git
+cd auto_accompaniment
+
+# Create virtual environment (recommended)
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install the package
+pip install -e .
+
+# Or install with all optional dependencies
+pip install -e ".[full]"
 ```
 
-**Using audio file:**
+### Basic Usage
+
 ```bash
-python identifier.py <path/to/audio.wav>
-python match.py <path/to/audio.wav>
+# List available audio devices
+auto-accomp devices
+
+# Build the pitch database from audio files
+auto-accomp build --audio-dir mp3/
+
+# Identify a song from microphone (10 seconds)
+auto-accomp identify --device 0
+
+# Identify and play accompaniment
+auto-accomp identify --play --backgrounds backgrounds/
+
+# Identify from an audio file
+auto-accomp identify song_sample.wav
+
+# Test microphone input
+auto-accomp test-mic --device 0
+
+# Generate a config file
+auto-accomp init-config
 ```
 
-## Important Configuration Values
+## Architecture
 
-### Constants (hardcoded in source files)
+### Module Overview
 
-| Constant | Value | File | Description |
-|----------|-------|------|-------------|
-| `BLOCK_SIZE` | 2048 | multiple | Audio frame size for pitch analysis |
-| `MIC_SECOND` / `MIC_LEN` | 10 | match.py, identifier.py | Recording duration in seconds |
-| `PB_OFFSET` | 0.45 | identifier.py | Playback offset compensation in seconds |
-| Sample rate | 44100 Hz | all | Standard CD-quality sampling rate |
-| Silence threshold | -40 dB | multiple | Aubio pitch detection silence level |
+| Module | Purpose |
+|--------|---------|
+| `core/pitch.py` | Pitch detection using Aubio (default) or CREPE (ML). Extracts pitch sequences and converts to intervals. |
+| `core/matching.py` | Multiple matching algorithms: simple (fast), DTW (robust), normalized correlation, combined. |
+| `core/database.py` | Manages the pitch interval database with pickle/JSON persistence. |
+| `core/recorder.py` | Real-time audio recording from microphone with pitch extraction. |
+| `core/playback.py` | VLC-based audio playback with time synchronization. |
+| `cli/main.py` | Click-based CLI with commands: build, identify, devices, stats, test-mic. |
+| `utils/config.py` | Configuration management via files or environment variables. |
+| `utils/audio.py` | Audio device enumeration and utilities. |
 
-### Paths and Credentials (MUST be updated for your environment)
-
-**Background music directory** (`identifier.py:9`):
-```python
-BG = '/home/antonyxiao/dejavu/backgrounds/'  # Update this path!
-```
-
-**Database credentials** (`identifier.py:13-20`, `fingerprinter.py:3-10`):
-```python
-config = {
-    "database": {
-        "host": "127.0.0.1",
-        "user": "root",
-        "passwd": "debang",  # Update password!
-        "db": "dejavu",
-    }
-}
-```
-
-**Microphone device index** (varies by file):
-- Device 4: Scarlett Solo (external audio interface)
-- Device 18: Laptop microphone
-
-To list available audio devices:
-```python
-import pyaudio
-p = pyaudio.PyAudio()
-for i in range(p.get_device_count()):
-    print(i, p.get_device_info_by_index(i)['name'])
-```
-
-## Code Architecture
-
-### Audio Processing Pipeline
+### Data Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         DATA PREPARATION                             │
+│                         BUILD PHASE                                  │
 ├─────────────────────────────────────────────────────────────────────┤
 │  Audio Files (mp3/wav/flac)                                         │
 │         │                                                            │
 │         ▼                                                            │
-│  extract_pitch.py ──► Pitch Detection ──► Interval Conversion       │
+│  PitchDetector.process_audio() ──► PitchSequence                    │
 │         │                                                            │
 │         ▼                                                            │
-│  intervals.pkl (serialized pitch interval database)                 │
-│                                                                      │
-│  fingerprinter.py ──► Dejavu ──► MySQL Database (fingerprints)      │
+│  PitchSequence.to_intervals() ──► intervals list                    │
+│         │                                                            │
+│         ▼                                                            │
+│  IntervalDatabase.add() ──► intervals.pkl                           │
 └─────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         RECOGNITION PHASE                            │
+│                       IDENTIFY PHASE                                 │
 ├─────────────────────────────────────────────────────────────────────┤
-│  Microphone / File Input                                            │
+│  Microphone / Audio File                                            │
 │         │                                                            │
 │         ▼                                                            │
-│  Pitch Detection (Aubio) ──► convert_to_intervals()                 │
+│  AudioRecorder.record_with_pitch() ──► PitchSequence                │
 │         │                                                            │
 │         ▼                                                            │
-│  simple_sequence_matching() ──► Compare against intervals.pkl       │
+│  PitchSequence.to_intervals() ──► query intervals                   │
 │         │                                                            │
 │         ▼                                                            │
-│  Best Match Song + Time Offset                                      │
-│         │                                                            │
+│  SequenceMatcher.identify() ──► MatchResult                         │
+│         │                          (song, position, confidence)     │
 │         ▼                                                            │
-│  VLC Playback (identifier.py) at synchronized position              │
+│  play_accompaniment() ──► VLC playback at synced position           │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### Key Functions
+## Configuration
 
-**`get_pitch(audio_data, block_size)`** - Extracts pitch values from audio data using Aubio
-- Location: `extract_pitch.py:12`, `match.py:16`
-- Returns: List of pitch values in Hz
+### Environment Variables
 
-**`convert_to_intervals(pitches)`** - Converts pitch sequence to pitch differences
-- Location: `extract_pitch.py:37`, `match.py:41`, `record_pitch.py:59`
-- Returns: List of pitch intervals (excluding silences)
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AA_CONFIG_FILE` | `config.json` | Path to config file |
+| `AA_DB_HOST` | `127.0.0.1` | MySQL host for Dejavu |
+| `AA_DB_PORT` | `3306` | MySQL port |
+| `AA_DB_USER` | `root` | MySQL username |
+| `AA_DB_PASSWORD` | `` | MySQL password |
+| `AA_DB_NAME` | `dejavu` | MySQL database name |
+| `AA_AUDIO_DEVICE` | auto | Input device index |
+| `AA_SAMPLE_RATE` | `44100` | Audio sample rate |
+| `AA_BLOCK_SIZE` | `2048` | Analysis block size |
+| `AA_RECORDING_DURATION` | `10` | Default recording duration |
+| `AA_AUDIO_DIR` | `mp3` | Audio files directory |
+| `AA_BACKGROUNDS_DIR` | `backgrounds` | Background tracks directory |
+| `AA_DEBUG` | `false` | Enable debug logging |
 
-**`simple_sequence_matching(short_intervals, long_intervals)`** - Finds best match position
-- Location: `match.py:50`
-- Returns: `(best_position, min_difference)`
+### Config File
 
-**`dtw_sequence_matching(short_intervals, long_intervals)`** - DTW-based matching (unused)
-- Location: `match.py:65`
-- Alternative matching algorithm using Dynamic Time Warping
+Copy `config.example.json` to `config.json` and modify:
+
+```json
+{
+  "database": {
+    "host": "127.0.0.1",
+    "user": "root",
+    "password": "your_password",
+    "database": "dejavu"
+  },
+  "audio": {
+    "sample_rate": 44100,
+    "block_size": 2048,
+    "input_device_index": null,
+    "recording_duration": 10
+  },
+  "paths": {
+    "audio_dir": "mp3",
+    "backgrounds_dir": "backgrounds"
+  }
+}
+```
+
+## Key Classes
+
+### PitchDetector
+
+```python
+from auto_accompaniment.core.pitch import PitchDetector, PitchAlgorithm
+
+# Create detector
+detector = PitchDetector(
+    sample_rate=44100,
+    block_size=2048,
+    algorithm=PitchAlgorithm.DEFAULT,
+    silence_threshold=-40.0,
+)
+
+# Process audio
+pitch_sequence = detector.process_audio(audio_data)
+intervals = pitch_sequence.to_intervals()
+```
+
+### SequenceMatcher
+
+```python
+from auto_accompaniment.core.matching import SequenceMatcher, MatchingMethod
+
+# Create matcher
+matcher = SequenceMatcher(method=MatchingMethod.SIMPLE)
+
+# Match against database
+results = matcher.match_all(query_intervals, database)
+best_match = results[0]  # Sorted by confidence
+
+print(f"Song: {best_match.song_name}")
+print(f"Position: {best_match.time_offset_seconds}s")
+print(f"Confidence: {best_match.confidence:.1%}")
+```
+
+### IntervalDatabase
+
+```python
+from auto_accompaniment.core.database import IntervalDatabase
+
+# Load or create database
+db = IntervalDatabase("intervals.pkl")
+
+# Add song
+db.add(name="my_song", intervals=[1.2, -0.5, 0.8, ...])
+
+# Query
+intervals = db.get_intervals("my_song")
+
+# Export for matching
+data = db.to_dict()  # {name: intervals, ...}
+```
+
+## Matching Algorithms
+
+| Algorithm | Speed | Accuracy | Best For |
+|-----------|-------|----------|----------|
+| `SIMPLE` | Fast | Good | Real-time, consistent tempo |
+| `DTW` | Slow | Best | Variable tempo, rubato |
+| `NORMALIZED` | Fast | Good | Volume variations |
+| `COMBINED` | Medium | Better | General use |
+
+## Dependencies
+
+### Required
+- `numpy>=1.21.0` - Numerical operations
+- `aubio>=0.4.9` - Pitch detection
+- `librosa>=0.9.0` - Audio loading
+- `click>=8.0.0` - CLI framework
+
+### Optional
+- `pyaudio>=0.2.11` - Microphone input (requires PortAudio)
+- `python-vlc>=3.0.0` - Playback (requires VLC)
+- `dtaidistance>=2.0.0` - DTW matching
+- `dejavu` - Audio fingerprinting (requires MySQL)
+- `crepe` + `tensorflow` - ML-based pitch detection
 
 ## Coding Conventions
 
 ### Style
-- **Naming**: snake_case for functions and variables
-- **Constants**: UPPER_CASE at module level
-- **Imports**: Standard library first, then third-party
+- Type hints on all public functions
+- Dataclasses for data structures
+- Protocols for interfaces
+- snake_case for functions/variables
+- UPPER_CASE for constants
 
 ### Patterns
-- Main execution code runs at module level (no `if __name__ == "__main__":` guard)
-- Commented-out code blocks contain alternative implementations for reference
-- Functions defined before use in file
+- Factory functions for object creation (`create_pitch_detector()`)
+- Context managers for resource cleanup
+- Logging instead of print statements
+- Configuration via dependency injection
 
-### Code Duplication
-Note: `get_pitch()` and `convert_to_intervals()` are duplicated across files. When modifying these functions, update all occurrences:
-- `extract_pitch.py`
-- `match.py`
-- `record_pitch.py`
+### Error Handling
+```python
+# Use specific exceptions
+class PitchDetectionError(Exception):
+    pass
 
-## File Naming Conventions
+# Log errors, don't suppress
+try:
+    result = process_audio(data)
+except Exception as e:
+    logger.error(f"Failed to process audio: {e}")
+    raise
+```
 
-**Audio files:**
-- Vocal tracks: `<songname>_vocal.mp3` or just `<songname>.mp3`
-- Background tracks: `<songname>_bg.mp3`
+## Testing
 
-The system extracts the song name using regex and appends `_bg.mp3` to find the corresponding background file.
+```bash
+# Run tests
+pytest
 
-## Dependencies
+# With coverage
+pytest --cov=auto_accompaniment
 
-### Python Packages
-- `aubio` - Real-time audio analysis and pitch detection
-- `librosa` - Audio loading and processing
-- `pyaudio` - Audio I/O (requires PortAudio system library)
-- `numpy` - Numerical operations
-- `dejavu` - Audio fingerprinting library
-- `vlc` - VLC media player Python bindings
-- `dtaidistance` - Dynamic Time Warping (optional, for alternative matching)
-- `wave` - WAV file handling (standard library)
-- `pickle` - Object serialization (standard library)
+# Specific test file
+pytest tests/test_pitch.py
+```
 
-### System Requirements
-- MySQL server (for Dejavu database)
-- PortAudio library (for PyAudio)
-- VLC media player (for playback)
-- Microphone input device
+## Development
+
+```bash
+# Install dev dependencies
+pip install -e ".[dev]"
+
+# Format code
+black src/
+
+# Lint
+ruff check src/
+
+# Type check
+mypy src/
+```
+
+## Migration from Legacy Code
+
+The legacy scripts (`extract_pitch.py`, `match.py`, etc.) are preserved for reference. To migrate:
+
+1. Replace direct `get_pitch()` calls with `PitchDetector.process_audio()`
+2. Replace `simple_sequence_matching()` with `SequenceMatcher.match()`
+3. Replace pickle dict loading with `IntervalDatabase`
+4. Use `Config` instead of hardcoded values
 
 ## Warnings and Known Issues
 
-1. **Hardcoded credentials**: Database password is in source code - do not commit sensitive credentials
-2. **Hardcoded paths**: Background music path is user-specific
-3. **Device indices**: Microphone device index must be configured per system
-4. **No error handling**: Files assume correct input and database connectivity
-5. **No requirements.txt**: Dependencies must be installed manually
-6. **Code duplication**: Core functions duplicated across files
+1. **Audio Device Selection**: Device indices vary by system. Use `auto-accomp devices` to find the correct index.
+2. **PyAudio Installation**: Requires PortAudio system library. On Ubuntu: `sudo apt install portaudio19-dev`
+3. **VLC Requirement**: Background playback requires VLC media player installed.
+4. **MySQL for Dejavu**: Fingerprinting feature requires MySQL database setup.
 
 ## Quick Reference Commands
 
 ```bash
-# Build pitch database from audio files
-python extract_pitch.py
+# Build database
+auto-accomp build -d mp3/
 
-# Fingerprint audio files to Dejavu database
-python fingerprinter.py
+# Identify from microphone
+auto-accomp identify -i 0
 
-# Identify song from microphone (10 seconds)
-python identifier.py
+# Identify with playback
+auto-accomp identify -i 0 --play -b backgrounds/
 
-# Identify song from file
-python identifier.py path/to/audio.wav
+# Identify from file
+auto-accomp identify recording.wav
 
-# Match against pitch database only (no playback)
-python match.py
-python match.py path/to/audio.wav
+# Use DTW matching (more accurate)
+auto-accomp identify -m dtw
 
-# Test microphone pitch recording (8 seconds)
-python record_pitch.py
+# Show database stats
+auto-accomp stats intervals.pkl
+
+# Test microphone
+auto-accomp test-mic -i 0 -t 5
+
+# Generate config file
+auto-accomp init-config -o config.json
 ```
